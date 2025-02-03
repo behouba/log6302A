@@ -73,7 +73,9 @@ func (pa *PHPAnalyzer) CountBranches(root *sitter.Node) int {
 		"while_statement":   true,
 		"for_statement":     true,
 		"foreach_statement": true,
-		"switch_statement":  true,
+		"switch_statement":  true, 
+		"do_while_statement": true,
+		"match_expression":  true,
 	}
 	traverseAST(root, func(n *sitter.Node) {
 		if branchTypes[n.Type()] {
@@ -86,32 +88,17 @@ func (pa *PHPAnalyzer) CountBranches(root *sitter.Node) int {
 // DetectDatabaseCalls recherche dans l’AST les appels susceptibles d’interagir avec une base de données.
 func (pa *PHPAnalyzer) DetectDatabaseCalls(root *sitter.Node, source []byte) []DatabaseCall {
 	var calls []DatabaseCall
+	patterns := []string{"mysql_query", "mysqli_query", "execute", "exec", "query", "prepare"}
 	traverseAST(root, func(n *sitter.Node) {
 		if n.Type() == "function_call_expression" || n.Type() == "member_call_expression" {
 			funcName := extractFunctionName(n, source)
 			line := n.StartPoint().Row + 1
-			switch funcName {
-			case "mysql_query", "mysqli_query":
-				calls = append(calls, DatabaseCall{
-					Function:    funcName,
-					Line:        line,
-					Description: fmt.Sprintf("Appel trouvé : %s", funcName),
-				})
-			case "execute":
-				if n.Parent() != nil && n.Parent().Type() == "member_call_expression" {
+			for _, pattern := range patterns {
+				if strings.Contains(funcName, pattern) {
 					calls = append(calls, DatabaseCall{
-						Function:    "$object->execute()",
+						Function:    funcName,
 						Line:        line,
-						Description: "Appel trouvé : $object->execute()",
-					})
-				}
-			case "exec":
-				codeSnippet := string(source[n.StartByte():n.EndByte()])
-				if strings.Contains(codeSnippet, "->mysql->exec") {
-					calls = append(calls, DatabaseCall{
-						Function:    "$object->mysql->exec",
-						Line:        line,
-						Description: "Appel trouvé : $object->mysql->exec(*)",
+						Description: fmt.Sprintf("Appel trouvé : %s", funcName),
 					})
 				}
 			}
