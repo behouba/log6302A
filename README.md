@@ -2,13 +2,15 @@
 
 ## Compilation
 
-Il faut installer Go v1.22+
+Il faut installer Go v1.22+ et tree-sitter
 
 Pour compiler l'outil, exécutez :
 
 ```bash
 go build -o php-analyzer main.go
 ```
+
+Pour Windows, privilégiez l'utilisation du fichier précompilé `php-analyzer.exe` afin d'éviter d'éventuels problèmes de compatibilité liés à la compilation sur windows.
 
 ## Utilisation
 
