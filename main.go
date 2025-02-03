@@ -73,6 +73,7 @@ func (pa *PHPAnalyzer) CountBranches(root *sitter.Node) int {
 		"while_statement":   true,
 		"for_statement":     true,
 		"foreach_statement": true,
+		"switch_statement":  true,
 	}
 	traverseAST(root, func(n *sitter.Node) {
 		if branchTypes[n.Type()] {
