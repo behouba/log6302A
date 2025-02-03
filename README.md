@@ -63,7 +63,7 @@ Analyse du fichier : code_to_analyze/wordpress_sources/wp-includes/wp-db.php
 
 ### 3. Détecter des vulnérabilités
 
-Commande : cve
+Commande : analyze-dir
 
 Description : Analyse un fichier PHP pour détecter des vulnérabilités connues.
 
