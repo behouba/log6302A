@@ -69,13 +69,13 @@ func traverseAST(node *sitter.Node, visit func(node *sitter.Node)) {
 func (pa *PHPAnalyzer) CountBranches(root *sitter.Node) int {
 	count := 0
 	branchTypes := map[string]bool{
-		"if_statement":      true,
-		"while_statement":   true,
-		"for_statement":     true,
-		"foreach_statement": true,
-		"switch_statement":  true, 
+		"if_statement":       true,
+		"while_statement":    true,
+		"for_statement":      true,
+		"foreach_statement":  true,
+		"switch_statement":   true,
 		"do_while_statement": true,
-		"match_expression":  true,
+		"match_expression":   true,
 	}
 	traverseAST(root, func(n *sitter.Node) {
 		if branchTypes[n.Type()] {
@@ -85,25 +85,66 @@ func (pa *PHPAnalyzer) CountBranches(root *sitter.Node) int {
 	return count
 }
 
-// DetectDatabaseCalls recherche dans l’AST les appels susceptibles d’interagir avec une base de données.
+// DetectDatabaseCalls recherche dans l’AST les appels a la base de données.
 func (pa *PHPAnalyzer) DetectDatabaseCalls(root *sitter.Node, source []byte) []DatabaseCall {
 	var calls []DatabaseCall
-	patterns := []string{"mysql_query", "mysqli_query", "execute", "exec", "query", "prepare"}
+
 	traverseAST(root, func(n *sitter.Node) {
 		if n.Type() == "function_call_expression" || n.Type() == "member_call_expression" {
 			funcName := extractFunctionName(n, source)
 			line := n.StartPoint().Row + 1
-			for _, pattern := range patterns {
-				if strings.Contains(funcName, pattern) {
+
+			switch funcName {
+			case "mysql_query", "mysqli_query":
+				calls = append(calls, DatabaseCall{
+					Function:    funcName,
+					Line:        line,
+					Description: fmt.Sprintf("Appel trouvé : %s", funcName),
+				})
+
+			case "execute":
+				if n.Parent() != nil && n.Parent().Type() == "member_call_expression" {
 					calls = append(calls, DatabaseCall{
-						Function:    funcName,
+						Function:    "$object->execute()",
 						Line:        line,
-						Description: fmt.Sprintf("Appel trouvé : %s", funcName),
+						Description: "Appel trouvé : $object->execute()",
+					})
+				}
+
+			case "exec":
+				codeSnippet := string(source[n.StartByte():n.EndByte()])
+
+				// Vérifie si c’est la forme $object->mysql->exec()
+				if strings.Contains(codeSnippet, "->mysql->exec") {
+					calls = append(calls, DatabaseCall{
+						Function:    "$object->mysql->exec",
+						Line:        line,
+						Description: "Appel trouvé : $object->mysql->exec(*)",
+					})
+				} else {
+					// Sinon, $object->exec() (générique)
+					calls = append(calls, DatabaseCall{
+						Function:    "$object->exec()",
+						Line:        line,
+						Description: "Appel trouvé : $object->exec(...)",
+					})
+				}
+
+			case "query", "get_results", "get_row", "get_col", "prepare",
+				"insert", "update", "delete", "replace":
+				codeSnippet := string(source[n.StartByte():n.EndByte()])
+				// Vérification qu’il s’agit bien d’un appel du type $wpdb->Xxx()
+				if strings.Contains(codeSnippet, "$wpdb->") {
+					calls = append(calls, DatabaseCall{
+						Function:    fmt.Sprintf("$wpdb->%s", funcName),
+						Line:        line,
+						Description: fmt.Sprintf("Appel trouvé : $wpdb->%s(...)", funcName),
 					})
 				}
 			}
 		}
 	})
+
 	return calls
 }
 
