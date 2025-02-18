@@ -39,8 +39,8 @@ func TestCFGBuilderOnIFStatement(t *testing.T) {
 	assert.Equal(t, []int{5}, cfg.Edges[4], "Assignment should connect to if_statement")
 	assert.Equal(t, []int{7}, cfg.Edges[6], "Variable in condition should connect to integer 5")
 	assert.Equal(t, []int{9}, cfg.Edges[8], "RelOp should connect to condition node")
-	assert.Equal(t, []int{10, 12}, cfg.Edges[9], "Condition should branch to true/false paths")
-	assert.Equal(t, []int{14}, cfg.Edges[11], "Echo True should lead to IfEnd")
+	assert.Equal(t, []int{11, 13}, cfg.Edges[10], "Condition should branch to true/false paths")
+	assert.Equal(t, []int{12}, cfg.Edges[11], "Echo True should lead to IfEnd")
 	assert.Equal(t, []int{14}, cfg.Edges[13], "Echo False should lead to IfEnd")
 	assert.Equal(t, []int{15}, cfg.Edges[14], "IfEnd should connect to Exit")
 }
@@ -86,18 +86,17 @@ mysql_query('SELECT *');`
 
 func TestCFGOnWhileLoop(t *testing.T) {
 	phpCode := `<?php
+	$i = 0;
 
-$i = 0;
+	while($i < 10) {
+		$i = $i + 1;
+		if($i == 5)
+			break;
+		continue;
+		echo "Dead";
+	}
 
-while($i < 10) {
-    $i = $i + 1;
-    if($i == 5)
-        break;
-    continue;
-    echo "Dead";
-}
-
-echo "Done";`
+	echo "Done";`
 
 	// Create a new CFG builder and generate the CFG
 	builder := NewCFGBuilder()
@@ -131,4 +130,62 @@ echo "Done";`
 
 	// Print CFG for debugging
 	cfg.Print()
+}
+
+// TestDetectDeadCode tests dead code detection on a given PHP script.
+func TestDetectDeadCode(t *testing.T) {
+	phpCode := `<?php
+	$i = 0;
+
+	while($i < 10) {
+		$i = $i + 1;
+		if($i == 5)
+			break;
+		continue;
+		echo "Dead";
+	}
+
+	echo "Done";`
+
+	// Initialize the CFG Builder
+	builder := NewCFGBuilder()
+	cfg, err := builder.BuildCFG([]byte(phpCode))
+	if err != nil {
+		t.Fatalf("Failed to build CFG: %v", err)
+	}
+
+	// Detect dead code
+	deadNodes := cfg.DetectDeadCode()
+
+	// Extract dead code content for assertion
+	deadCodeContents := make(map[string]bool)
+	for _, id := range deadNodes {
+		if node, exists := cfg.Nodes[id]; exists {
+			deadCodeContents[node.code] = true
+		}
+	}
+
+	// Expected dead code: "Dead" should be unreachable
+	expectedDeadCode := []string{"Dead"}
+
+	// Check that all expected dead code nodes are detected
+	for _, expected := range expectedDeadCode {
+		if !deadCodeContents[expected] {
+			t.Errorf("Expected dead code '%s' not detected", expected)
+		}
+	}
+
+	// Ensure no false positives (if necessary, print unexpected dead nodes)
+	for content := range deadCodeContents {
+		found := false
+		for _, expected := range expectedDeadCode {
+			if content == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Unexpected dead code detected: '%s'", content)
+		}
+	}
 }
