@@ -58,6 +58,7 @@ func traverseAST(node *sitter.Node, visit func(node *sitter.Node)) {
 	if node == nil {
 		return
 	}
+	// fmt.Println("Visiting node:", node.Type())
 	visit(node)
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
