@@ -328,6 +328,25 @@ func (b *CFGBuilder) visit(node *sitter.Node, parentID int) int {
 		b.cfg.AddEdge(continueID, whileConditionID)
 		return Terminal
 
+	case "compound_statement":
+		// Assume the first and last children are "{" and "}".
+		seq := parentID
+		for i := 1; i < int(node.ChildCount())-1; i++ {
+			child := node.Child(i)
+			// If we are already in dead code, process the child without linking.
+			if seq == Terminal {
+				_ = b.visit(child, Terminal)
+				continue
+			}
+			res := b.visit(child, seq)
+			if res == Terminal {
+				seq = Terminal
+			} else {
+				seq = res
+			}
+		}
+		return seq
+
 	case "name":
 		return b.addGenericNode(NodeId, node, parentID)
 
@@ -477,7 +496,6 @@ func (cfg *CFG) DetectDeadCode() []int {
 
 	var dead []int
 	for id := range cfg.Nodes {
-		fmt.Println(id)
 		if !visited[id] {
 			dead = append(dead, id)
 		}

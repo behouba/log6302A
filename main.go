@@ -400,6 +400,46 @@ Exemples:
 	fmt.Println(usage)
 }
 
+// Ajout de la méthode AnalyzeDirectoryDeadCode dans PHPAnalyzer.
+func (pa *PHPAnalyzer) AnalyzeDirectoryDeadCode(dirPath string) {
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Printf("Erreur d'accès à %q: %v", path, err)
+			return nil
+		}
+		if info.IsDir() || !strings.HasSuffix(strings.ToLower(info.Name()), ".php") {
+			return nil
+		}
+		// Parse le fichier PHP
+		_, content, err := pa.ParseFile(path)
+		if err != nil {
+			log.Printf("Erreur lors du parsing du fichier %q: %v", path, err)
+			return nil
+		}
+		// Construire le CFG à l'aide du CFGBuilder
+		builder := NewCFGBuilder()
+		cfg, err := builder.BuildCFG(content)
+		if err != nil {
+			log.Printf("Erreur lors de la construction du CFG pour le fichier %q: %v", path, err)
+			return nil
+		}
+		// Détection du code mort dans le CFG
+		deadNodes := cfg.DetectDeadCode()
+		if len(deadNodes) > 0 {
+			fmt.Printf("\nDead code trouvé dans %q:\n", path)
+			for _, id := range deadNodes {
+				if node, exists := cfg.Nodes[id]; exists {
+					fmt.Printf(" - Node %d: %s [%s]\n", node.ID, node.Type, node.code)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("Erreur lors de l'analyse du dossier %q: %v", dirPath, err)
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -490,6 +530,105 @@ func main() {
 			os.Exit(1)
 		}
 		analyzer.AnalyzeDirectory(*dirPath)
+
+	// Nouvelle commande "dead" pour la détection du code mort
+	case "dead":
+		deadCmd := flag.NewFlagSet("dead", flag.ExitOnError)
+		filePath := deadCmd.String("file", "", "Chemin vers le fichier PHP à analyser")
+		dirPath := deadCmd.String("dir", "", "Chemin vers le dossier à analyser récursivement")
+		deadCmd.Parse(os.Args[2:])
+		if *filePath == "" && *dirPath == "" {
+			fmt.Println("Le flag -file ou -dir est requis pour la commande dead.")
+			deadCmd.Usage()
+			os.Exit(1)
+		}
+		// Analyse d'un fichier
+		if *filePath != "" {
+			_, content, err := analyzer.ParseFile(*filePath)
+			if err != nil {
+				log.Fatalf("Erreur lors du parsing du fichier %q: %v", *filePath, err)
+			}
+			builder := NewCFGBuilder()
+			cfg, err := builder.BuildCFG(content)
+			if err != nil {
+				log.Fatalf("Erreur lors de la construction du CFG pour le fichier %q: %v", *filePath, err)
+			}
+			deadNodes := cfg.DetectDeadCode()
+			if len(deadNodes) > 0 {
+				fmt.Printf("Dead code trouvé dans %q:\n", *filePath)
+				for _, id := range deadNodes {
+					if node, exists := cfg.Nodes[id]; exists {
+						fmt.Printf(" - Node %d: %s [%s]\n", node.ID, node.Type, node.code)
+					}
+				}
+			} else {
+				fmt.Printf("Aucun dead code trouvé dans %q.\n", *filePath)
+			}
+		}
+		// Analyse d'un dossier récursif
+		if *dirPath != "" {
+			analyzer.AnalyzeDirectoryDeadCode(*dirPath)
+		}
+
+	case "deadcount":
+		deadCountCmd := flag.NewFlagSet("deadcount", flag.ExitOnError)
+		filePath := deadCountCmd.String("file", "", "Chemin vers le fichier PHP à analyser")
+		dirPath := deadCountCmd.String("dir", "", "Chemin vers le dossier à analyser récursivement")
+		deadCountCmd.Parse(os.Args[2:])
+
+		if *filePath == "" && *dirPath == "" {
+			fmt.Println("Le flag -file ou -dir est requis pour la commande deadcount.")
+			deadCountCmd.Usage()
+			os.Exit(1)
+		}
+
+		// Analyse d'un fichier
+		if *filePath != "" {
+			_, content, err := analyzer.ParseFile(*filePath)
+			if err != nil {
+				log.Fatalf("Erreur lors du parsing du fichier %q: %v", *filePath, err)
+			}
+			builder := NewCFGBuilder()
+			cfg, err := builder.BuildCFG(content)
+			if err != nil {
+				log.Fatalf("Erreur lors de la construction du CFG pour le fichier %q: %v", *filePath, err)
+			}
+			deadNodes := cfg.DetectDeadCode()
+			fmt.Printf("Nombre de dead code détecté dans %q : %d\n", *filePath, len(deadNodes))
+		}
+
+		// Analyse d'un dossier récursif
+		if *dirPath != "" {
+			totalDead := 0
+			err := filepath.Walk(*dirPath, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					log.Printf("Erreur d'accès à %q: %v", path, err)
+					return nil
+				}
+				if info.IsDir() || !strings.HasSuffix(strings.ToLower(info.Name()), ".php") {
+					return nil
+				}
+				_, content, err := analyzer.ParseFile(path)
+				if err != nil {
+					log.Printf("Erreur lors du parsing du fichier %q: %v", path, err)
+					return nil
+				}
+				builder := NewCFGBuilder()
+				cfg, err := builder.BuildCFG(content)
+				if err != nil {
+					log.Printf("Erreur lors de la construction du CFG pour le fichier %q: %v", path, err)
+					return nil
+				}
+				deadNodes := cfg.DetectDeadCode()
+				fmt.Printf("Dead code détecté dans %q : %d\n", path, len(deadNodes))
+				totalDead += len(deadNodes)
+				return nil
+			})
+			if err != nil {
+				log.Printf("Erreur lors de la traversée du dossier %q: %v", *dirPath, err)
+			}
+			fmt.Printf("\nNombre total de dead code détecté dans %q : %d\n", *dirPath, totalDead)
+		}
 
 	default:
 		fmt.Printf("Commande inconnue : %q\n", command)

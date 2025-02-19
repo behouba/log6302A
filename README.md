@@ -93,3 +93,47 @@ Analyse du fichier : code_to_analyze/test_cve/2021_21705.php
 Analyse du fichier : code_to_analyze/test_cve/2021_21707.php
 [CVE-2021-21707] simplexml_load_file avec chemin dynamique détecté (ligne 10)
 ```
+
+## 4. Détection du code mort (dead code)
+
+Commande : `dead`
+Description : Analyse un fichier ou un dossier pour détecter le code mort. Le CFG est généré, et les nœuds inaccessibles (détectés comme "dead") sont affichés avec leur identifiant, leur type et un extrait de code.
+Exemples :
+
+```bash
+./php-analyzer dead -file=/chemin/vers/fichier.php
+```
+
+```bash
+./php-analyzer dead -dir=/chemin/vers/dossier
+```
+
+Example de sortie:
+```bash
+Dead code trouvé dans "/chemin/vers/fichier.php":
+ - Node 25: Echo [Echo]
+ - Node 26: String [Dead]
+```
+
+## 5. Compter le nombre de dead code détecté
+
+Commande : `deadcount`
+Description : Calcule et affiche le nombre de nœuds de code mort détectés dans un fichier ou dans l'ensemble des fichiers d'un dossier.
+Exemples :
+
+```bash
+./php-analyzer deadcount -file=/chemin/vers/fichier.php
+```
+
+```bash
+Nombre de dead code détecté dans "/chemin/vers/fichier.php" : 2
+```
+
+
+```bash
+./php-analyzer deadcount -dir=/chemin/vers/dossier
+```
+
+```bash
+./php-analyzer deadcount -dir=/chemin/vers/dossier | wc -l
+```
